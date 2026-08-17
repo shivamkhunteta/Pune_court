@@ -161,12 +161,9 @@ try{
    }
    ready=true;
    el("savedMsg").textContent="✓ Saved online";
-   // Do not rebuild the setup inputs while the user is typing.
-   // Rebuilding an input causes Android's keyboard/focus to disappear.
-   const active = document.activeElement;
-   const typingInSetup = active && active.tagName === "INPUT" &&
-                         active.closest("#setupPage");
-   if(!typingInSetup) renderSetup();
+   // Never rebuild the setup form from a Firebase update.
+   // Rebuilding inputs is what causes Android's keyboard to close.
+   updateSetupFieldsWithoutReplacingInputs();
    renderScore();
  });
 }catch(e){
@@ -208,6 +205,21 @@ function showPage(page){
  render();
 }
 
+function updateSetupFieldsWithoutReplacingInputs(){
+  tournaments.forEach((t,i)=>{
+    const card=el("setupList").children[i];
+    if(!card) return;
+    const inputs=card.querySelectorAll("input");
+    if(!inputs.length) return;
+    // Only update a field if the user is not currently editing it.
+    if(document.activeElement!==inputs[0]) inputs[0].value=t.name;
+    if(document.activeElement!==inputs[1]) inputs[1].value=t.teamA;
+    if(document.activeElement!==inputs[2]) inputs[2].value=t.teamB;
+    const title=card.querySelector("h2");
+    if(title) title.textContent=t.name;
+  });
+}
+
 function renderSetup(){
  const list=el("setupList"); list.innerHTML="";
  tournaments.forEach((t,i)=>{
@@ -217,15 +229,15 @@ function renderSetup(){
    <div class="row">
     <div>
      <label>Tournament Name</label>
-     <input maxlength="30" value="${escapeAttr(t.name)}" oninput="updateTournamentName(${i},this.value)">
+     <input maxlength="30" value="${escapeAttr(t.name)}" onchange="updateTournamentName(${i},this.value)">
     </div><div></div>
     <div>
      <label>🔴 Red Team / Team 1</label>
-     <input maxlength="30" value="${escapeAttr(t.teamA)}" oninput="updateTeam(${i},'teamA',this.value)">
+     <input maxlength="30" value="${escapeAttr(t.teamA)}" onchange="updateTeam(${i},'teamA',this.value)">
     </div>
     <div>
      <label>🔵 Blue Team / Team 2</label>
-     <input maxlength="30" value="${escapeAttr(t.teamB)}" oninput="updateTeam(${i},'teamB',this.value)">
+     <input maxlength="30" value="${escapeAttr(t.teamB)}" onchange="updateTeam(${i},'teamB',this.value)">
     </div>
    </div>`;
   list.appendChild(div);
@@ -251,8 +263,10 @@ function renderScore(){
 function render(){renderSetup();renderScore()}
 
 function updateTournamentName(i,value){
- tournaments[i].name=value||"Tournament "+(i+1);
- renderScore();
+ tournaments[i].name=value.trim()||"Tournament "+(i+1);
+ const title=el("setupList").children[i]?.querySelector("h2");
+ if(title) title.textContent=tournaments[i].name;
+ if(i===current) renderScore();
  persist();
 }
 function updateTeam(i,team,value){
