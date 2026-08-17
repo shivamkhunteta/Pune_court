@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tournament Score Tracker</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f4f5f7;color:#111827}
+.app{max-width:900px;margin:auto;padding:18px}
+header{text-align:center;margin-bottom:18px}
+h1{margin:5px 0 6px}
+.subtitle{color:#6b7280;margin:0}
+.nav{display:flex;gap:8px;margin-bottom:16px}
+.nav button{flex:1;padding:13px;border:0;border-radius:12px;background:#e5e7eb;font-weight:700;font-size:16px;cursor:pointer}
+.nav button.active{background:#111827;color:white}
+.page{display:none}
+.page.active{display:block}
+.card{background:white;border-radius:18px;padding:20px;margin-bottom:15px;box-shadow:0 3px 14px rgba(0,0,0,.06)}
+.tournament-list{display:grid;grid-template-columns:1fr;gap:12px}
+.tournament{border:1px solid #e5e7eb;border-radius:14px;padding:15px}
+.tournament h2{margin:0 0 12px}
+label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}
+input{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:10px;font-size:16px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.save-note{text-align:center;color:#6b7280;font-size:13px}
+.score-select{display:flex;gap:8px;overflow-x:auto;margin-bottom:15px}
+.score-select button{white-space:nowrap}
+button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;font-weight:700;cursor:pointer}
+.tour-btn{background:#e5e7eb}
+.tour-btn.active{background:#111827;color:white}
+.scoreboard{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.team-card{border-radius:20px;padding:20px;text-align:center;color:white}
+.team-red{background:#dc2626}
+.team-blue{background:#2563eb}
+.team-card h2{margin:0;font-size:22px}
+.score{font-size:78px;font-weight:800;margin:20px 0}
+.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.score-btn{background:white;color:#111827}
+.score-btn:active{transform:scale(.97)}
+.controls{text-align:center;margin-top:15px}
+.controls button{margin:4px;background:#e5e7eb}
+.status{text-align:center;color:#6b7280;font-size:14px;margin-top:12px}
+@media(max-width:600px){
+ .row,.scoreboard{grid-template-columns:1fr}
+ .score{font-size:65px}
+ .app{padding:12px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+<h1>🏆 Tournament Score Tracker</h1>
+<p class="subtitle">Manage teams on one page and track scores on another</p>
+</header>
+
+<div class="nav">
+<button id="setupNav" class="active" onclick="showPage('setup')">⚙️ Setup</button>
+<button id="scoreNav" onclick="showPage('score')">🏆 Score</button>
+</div>
+
+<!-- SETUP PAGE -->
+<section id="setupPage" class="page active">
+<div class="card">
+<h2>Tournament & Team Setup</h2>
+<p class="save-note">Change tournament names and team names here. Changes are reflected on the Score page.</p>
+</div>
+
+<div id="setupList" class="tournament-list"></div>
+</section>
+
+<!-- SCORE PAGE -->
+<section id="scorePage" class="page">
+<div id="tournamentButtons" class="score-select"></div>
+
+<div class="scoreboard">
+<div class="team-card team-red">
+<h2 id="teamALabel">Red Team</h2>
+<div id="scoreA" class="score">0</div>
+<div class="buttons">
+<button class="score-btn" onclick="changeScore('a',-7)">−7</button>
+<button class="score-btn" onclick="changeScore('a',-1)">−1</button>
+<button class="score-btn" onclick="changeScore('a',1)">+1</button>
+<button class="score-btn" onclick="changeScore('a',7)">+7</button>
+</div>
+</div>
+
+<div class="team-card team-blue">
+<h2 id="teamBLabel">Blue Team</h2>
+<div id="scoreB" class="score">0</div>
+<div class="buttons">
+<button class="score-btn" onclick="changeScore('b',-7)">−7</button>
+<button class="score-btn" onclick="changeScore('b',-1)">−1</button>
+<button class="score-btn" onclick="changeScore('b',1)">+1</button>
+<button class="score-btn" onclick="changeScore('b',7)">+7</button>
+</div>
+</div>
+</div>
+
+<div class="controls">
+<button onclick="undo()">↩ Undo</button>
+<button onclick="resetTournament()">↻ Reset Tournament</button>
+</div>
+<div id="status" class="status"></div>
+</section>
+</div>
+
+<script>
+function newTournament(name){
+ return {name,teamA:"Red Team",teamB:"Blue Team",a:0,b:0,history:[]};
+}
+let tournaments=[
+ newTournament("Tournament 1"),
+ newTournament("Tournament 2"),
+ newTournament("Tournament 3")
+];
+let current=0;
+
+const el=id=>document.getElementById(id);
+
+function showPage(page){
+ el("setupPage").classList.toggle("active",page==="setup");
+ el("scorePage").classList.toggle("active",page==="score");
+ el("setupNav").classList.toggle("active",page==="setup");
+ el("scoreNav").classList.toggle("active",page==="score");
+ render();
+}
+
+function renderSetup(){
+ const list=el("setupList");
+ list.innerHTML="";
+ tournaments.forEach((t,i)=>{
+   const div=document.createElement("div");
+   div.className="tournament";
+   div.innerHTML=`
+    <h2>${escapeHtml(t.name)}</h2>
+    <div class="row">
+      <div>
+        <label>Tournament Name</label>
+        <input maxlength="30" value="${escapeAttr(t.name)}" oninput="updateTournamentName(${i},this.value)">
+      </div>
+      <div></div>
+      <div>
+        <label>🔴 Red Team / Team 1</label>
+        <input maxlength="30" value="${escapeAttr(t.teamA)}" oninput="updateTeam(${i},'teamA',this.value)">
+      </div>
+      <div>
+        <label>🔵 Blue Team / Team 2</label>
+        <input maxlength="30" value="${escapeAttr(t.teamB)}" oninput="updateTeam(${i},'teamB',this.value)">
+      </div>
+    </div>`;
+   list.appendChild(div);
+ });
+}
+
+function renderScore(){
+ const t=tournaments[current];
+ el("teamALabel").textContent=t.teamA||"Red Team";
+ el("teamBLabel").textContent=t.teamB||"Blue Team";
+ el("scoreA").textContent=t.a;
+ el("scoreB").textContent=t.b;
+ el("status").textContent=`${t.name} • ${t.teamA||"Red Team"} ${t.a} — ${t.b} ${t.teamB||"Blue Team"}`;
+
+ const buttons=el("tournamentButtons");
+ buttons.innerHTML="";
+ tournaments.forEach((x,i)=>{
+   const b=document.createElement("button");
+   b.className="tour-btn"+(i===current?" active":"");
+   b.textContent=x.name;
+   b.onclick=()=>{current=i;renderScore()};
+   buttons.appendChild(b);
+ });
+}
+
+function render(){
+ renderSetup();
+ renderScore();
+}
+
+function updateTournamentName(i,value){
+ tournaments[i].name=value||"Tournament "+(i+1);
+ renderScore();
+}
+function updateTeam(i,team,value){
+ tournaments[i][team]=value;
+ if(i===current) renderScore();
+}
+function changeScore(team,amount){
+ const t=tournaments[current];
+ t.history.push({a:t.a,b:t.b});
+ t[team]=Math.max(0,t[team]+amount);
+ renderScore();
+}
+function undo(){
+ const t=tournaments[current];
+ const previous=t.history.pop();
+ if(previous){t.a=previous.a;t.b=previous.b;renderScore();}
+}
+function resetTournament(){
+ const t=tournaments[current];
+ t.a=0;t.b=0;t.history=[];
+ renderScore();
+}
+function escapeHtml(s){
+ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s){return escapeHtml(s)}
+
+render();
+</script>
+</body>
+</html>
