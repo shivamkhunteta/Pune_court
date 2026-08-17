@@ -161,7 +161,13 @@ try{
    }
    ready=true;
    el("savedMsg").textContent="✓ Saved online";
-   render();
+   // Do not rebuild the setup inputs while the user is typing.
+   // Rebuilding an input causes Android's keyboard/focus to disappear.
+   const active = document.activeElement;
+   const typingInSetup = active && active.tagName === "INPUT" &&
+                         active.closest("#setupPage");
+   if(!typingInSetup) renderSetup();
+   renderScore();
  });
 }catch(e){
  console.error(e);
@@ -180,14 +186,18 @@ function normalise(arr){
  })).concat(DEFAULTS.slice(arr.length)).slice(0,3);
 }
 
+let saveTimer=null;
 function persist(){
  if(!db)return;
- db.ref(DB_PATH).set({tournaments:tournaments}).then(()=>{
+ clearTimeout(saveTimer);
+ saveTimer=setTimeout(()=>{
+   db.ref(DB_PATH).set({tournaments:tournaments}).then(()=>{
    el("savedMsg").textContent="✓ Saved online";
- }).catch(err=>{
-   console.error(err);
-   el("savedMsg").textContent="⚠ Could not save — check connection";
- });
+   }).catch(err=>{
+     console.error(err);
+     el("savedMsg").textContent="⚠ Could not save — check connection";
+   });
+ },250);
 }
 
 function showPage(page){
@@ -242,11 +252,12 @@ function render(){renderSetup();renderScore()}
 
 function updateTournamentName(i,value){
  tournaments[i].name=value||"Tournament "+(i+1);
- renderScore(); persist();
+ renderScore();
+ persist();
 }
 function updateTeam(i,team,value){
  tournaments[i][team]=value;
- if(i===current)renderScore();
+ if(i===current) renderScore();
  persist();
 }
 function changeScore(team,amount){
