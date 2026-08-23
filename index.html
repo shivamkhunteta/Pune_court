@@ -179,6 +179,7 @@ try{
    // Rebuilding inputs is what causes Android's keyboard to close.
    updateSetupFieldsWithoutReplacingInputs();
    renderScore();
+   renderHistory();
  });
 }catch(e){
  console.error(e);
@@ -214,8 +215,10 @@ function persist(){
 function showPage(page){
  el("setupPage").classList.toggle("active",page==="setup");
  el("scorePage").classList.toggle("active",page==="score");
+ el("historyPage").classList.toggle("active",page==="history");
  el("setupNav").classList.toggle("active",page==="setup");
  el("scoreNav").classList.toggle("active",page==="score");
+ el("historyNav").classList.toggle("active",page==="history");
  render();
 }
 
@@ -310,34 +313,73 @@ function renderHistory(){
 }
 function render(){renderSetup();renderScore();renderHistory()}
 
+function addHistory(t,action,details,oldState,newState){
+ t.history=t.history||[];
+ t.history.push({
+   timestamp:Date.now(),
+   action:action,
+   details:details,
+   oldState:oldState||null,
+   newState:newState||null
+ });
+}
+
 function updateTournamentName(i,value){
- tournaments[i].name=value.trim()||"Tournament "+(i+1);
+ const t=tournaments[i];
+ const oldName=t.name;
+ const newName=value.trim()||"Tournament "+(i+1);
+ if(oldName===newName)return;
+ t.name=newName;
+ addHistory(t,"Tournament name updated",`"${oldName}" → "${newName}"`,
+   {name:oldName},{name:newName});
  const title=el("setupList").children[i]?.querySelector("h2");
- if(title) title.textContent=tournaments[i].name;
+ if(title) title.textContent=t.name;
  if(i===current) renderScore();
- persist();
+ persist();renderHistory();
 }
+
 function updateTeam(i,team,value){
- tournaments[i][team]=value;
+ const t=tournaments[i];
+ const oldValue=t[team]||"";
+ const newValue=value.trim()||(team==="teamA"?"Red Team":"Blue Team");
+ if(oldValue===newValue)return;
+ t[team]=newValue;
+ addHistory(t,"Team name updated",
+   `${team==="teamA"?"Team 1 / Red Team":"Team 2 / Blue Team"}: "${oldValue}" → "${newValue}"`,
+   {[team]:oldValue},{[team]:newValue});
  if(i===current) renderScore();
- persist();
+ persist();renderHistory();
 }
+
 function changeScore(team,amount){
  const t=tournaments[current];
- t.history=t.history||[];
- t.history.push({a:t.a,b:t.b});
- t[team]=Math.max(0,t[team]+amount);
- if(t.history.length>100)t.history.shift();
- persist();renderScore();
+ const oldA=Number(t.a)||0,oldB=Number(t.b)||0;
+ const oldScore=Number(t[team])||0;
+ const newScore=Math.max(0,oldScore+amount);
+ if(oldScore===newScore)return;
+ t[team]=newScore;
+ addHistory(t,"Score updated",
+   `${team==="a"?t.teamA:t.teamB}: ${oldScore} → ${newScore} (${amount>0?"+":""}${amount})`,
+   {a:oldA,b:oldB},{a:Number(t.a)||0,b:Number(t.b)||0});
+ persist();renderScore();renderHistory();
 }
+
 function undo(){
- const t=tournaments[current],previous=(t.history||[]).pop();
- if(previous){
-   t.a=Number(previous.a)||0;
-   t.b=Number(previous.b)||0;
-   persist();renderScore();
- }
+ const t=tournaments[current];
+ const events=t.history||[];
+ const last=[...events].reverse().find(e=>e.newState &&
+   Number.isFinite(Number(e.newState.a)) &&
+   Number.isFinite(Number(e.newState.b)) &&
+   e.oldState);
+ if(!last)return;
+ const oldA=Number(t.a)||0,oldB=Number(t.b)||0;
+ t.a=Number(last.oldState.a)||0;
+ t.b=Number(last.oldState.b)||0;
+ addHistory(t,"Undo",`Score restored from ${oldA}–${oldB} to ${t.a}–${t.b}`,
+   {a:oldA,b:oldB},{a:t.a,b:t.b});
+ persist();renderScore();renderHistory();
 }
+
 function openManual(team){
  manualTeam=team;
  const t=tournaments[current];
@@ -351,11 +393,16 @@ function saveManual(){
  const value=parseInt(el("manualScore").value,10);
  if(Number.isInteger(value)&&value>=0){
    const t=tournaments[current];
-   t.history=t.history||[];
-   t.history.push({a:t.a,b:t.b});
-   t[manualTeam]=value;
-   if(t.history.length>100)t.history.shift();
-   persist();renderScore();closeManual();
+   const oldA=Number(t.a)||0,oldB=Number(t.b)||0;
+   const oldScore=Number(t[manualTeam])||0;
+   if(oldScore!==value){
+     t[manualTeam]=value;
+     addHistory(t,"Manual score updated",
+       `${manualTeam==="a"?t.teamA:t.teamB}: ${oldScore} → ${value}`,
+       {a:oldA,b:oldB},{a:Number(t.a)||0,b:Number(t.b)||0});
+     persist();renderScore();renderHistory();
+   }
+   closeManual();
  }
 }
 function escapeHtml(s){
