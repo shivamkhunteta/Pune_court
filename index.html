@@ -12,7 +12,7 @@ header{text-align:center;margin-bottom:16px}
 h1{margin:5px 0}.subtitle{color:#6b7280;margin:0}
 .connection{margin:10px auto 0;font-size:13px;font-weight:700}
 .online{color:#15803d}.offline{color:#b91c1c}
-.nav{display:flex;gap:8px;margin-bottom:16px}
+.nav{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
 .nav button{flex:1;padding:13px;border:0;border-radius:12px;background:#e5e7eb;font-weight:700;font-size:16px}
 .nav button.active{background:#111827;color:#fff}
 .page{display:none}.page.active{display:block}
@@ -25,6 +25,12 @@ label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}
 input{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:10px;font-size:16px}
 .note{text-align:center;color:#6b7280;font-size:13px}
 .saved{text-align:center;color:#15803d;font-size:13px;margin-top:8px}
+.history-empty{text-align:center;color:#6b7280;padding:20px}
+.history-item{border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin:9px 0;background:#fafafa}
+.history-time{font-size:12px;color:#6b7280;margin-bottom:5px}
+.history-action{font-weight:700;margin-bottom:4px}
+.history-detail{font-size:14px;color:#374151}
+.history-score{font-size:13px;color:#111827;margin-top:5px;font-weight:700}
 .score-select{display:flex;gap:8px;overflow-x:auto;margin-bottom:15px}
 button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;font-weight:700;cursor:pointer}
 .tour-btn{background:#e5e7eb;white-space:nowrap}.tour-btn.active{background:#111827;color:#fff}
@@ -60,12 +66,13 @@ button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;font-weight:
 <div class="nav">
 <button id="setupNav" class="active" onclick="showPage('setup')">⚙️ Setup</button>
 <button id="scoreNav" onclick="showPage('score')">🏆 Score</button>
+<button id="historyNav" onclick="showPage('history')">📜 History</button>
 </div>
 
 <section id="setupPage" class="page active">
 <div class="card">
 <h2>Tournament & Team Setup</h2>
-<p class="note">Tournament names and team names are saved online and shared with every device.</p>
+<p class="note">Tournament names, team names, scores, and complete update history are saved online and shared with every device.</p>
 <p id="savedMsg" class="saved">Waiting for Firebase…</p>
 </div>
 <div id="setupList" class="tournament-list"></div>
@@ -103,6 +110,13 @@ button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;font-weight:
 <button onclick="undo()">↩ Undo</button>
 </div>
 <div id="status" class="status"></div>
+</section>
+<section id="historyPage" class="page">
+  <div class="card">
+    <h2>📜 Full Update History</h2>
+    <p class="note">Every score, team-name, and tournament-name update is recorded with its date and time.</p>
+    <div id="historyList"></div>
+  </div>
 </section>
 </div>
 
@@ -179,7 +193,7 @@ function normalise(arr){
    teamB:t?.teamB || "Blue Team",
    a:Number.isFinite(Number(t?.a))?Number(t.a):0,
    b:Number.isFinite(Number(t?.b))?Number(t.b):0,
-   history:Array.isArray(t?.history)?t.history.slice(-100):[]
+   history:Array.isArray(t?.history)?t.history:[]
  })).concat(DEFAULTS.slice(arr.length)).slice(0,3);
 }
 
@@ -260,7 +274,41 @@ function renderScore(){
  });
 }
 
-function render(){renderSetup();renderScore()}
+function renderHistory(){
+  const box=el("historyList");
+  if(!box)return;
+  const entries=[];
+  tournaments.forEach((t,i)=>{
+    (t.history||[]).forEach(event=>{
+      entries.push({
+        tournament:t.name||("Tournament "+(i+1)),
+        timestamp:Number(event.timestamp)||0,
+        action:event.action||"Update",
+        details:event.details||"",
+        score:event.newState && Number.isFinite(Number(event.newState.a)) && Number.isFinite(Number(event.newState.b))
+          ? `${t.teamA||"Red Team"} ${event.newState.a} — ${event.newState.b} ${t.teamB||"Blue Team"}`
+          : ""
+      });
+    });
+  });
+  entries.sort((a,b)=>b.timestamp-a.timestamp);
+  if(!entries.length){
+    box.innerHTML='<div class="history-empty">No updates yet.</div>';
+    return;
+  }
+  box.innerHTML=entries.map(e=>{
+    const d=new Date(e.timestamp);
+    const time=Number.isNaN(d.getTime())?"Unknown time":
+      d.toLocaleString([], {dateStyle:"medium",timeStyle:"medium"});
+    return `<div class="history-item">
+      <div class="history-time">${escapeHtml(time)}</div>
+      <div class="history-action">${escapeHtml(e.tournament)} — ${escapeHtml(e.action)}</div>
+      <div class="history-detail">${escapeHtml(e.details)}</div>
+      ${e.score?`<div class="history-score">${escapeHtml(e.score)}</div>`:""}
+    </div>`;
+  }).join("");
+}
+function render(){renderSetup();renderScore();renderHistory()}
 
 function updateTournamentName(i,value){
  tournaments[i].name=value.trim()||"Tournament "+(i+1);
