@@ -31,6 +31,14 @@ input{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:10px;font-s
 .history-action{font-weight:700;margin-bottom:4px}
 .history-detail{font-size:14px;color:#374151}
 .history-score{font-size:13px;color:#111827;margin-top:5px;font-weight:700}
+.team-history{margin-top:14px;background:rgba(255,255,255,.94);color:#111827;border-radius:14px;padding:12px;text-align:left}
+.team-history h3{font-size:15px;margin:0 0 8px;text-align:center}
+.team-history-item{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid #e5e7eb;font-size:13px}
+.team-history-item:first-child{border-top:0}
+.team-history-change{font-weight:700}
+.team-history-time{white-space:nowrap;color:#6b7280;font-size:12px}
+.team-history-empty{text-align:center;color:#6b7280;font-size:13px;padding:6px}
+
 .score-select{display:flex;gap:8px;overflow-x:auto;margin-bottom:15px}
 button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;font-weight:700;cursor:pointer}
 .tour-btn{background:#e5e7eb;white-space:nowrap}.tour-btn.active{background:#111827;color:#fff}
@@ -66,7 +74,6 @@ button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;font-weight:
 <div class="nav">
 <button id="setupNav" class="active" onclick="showPage('setup')">⚙️ Setup</button>
 <button id="scoreNav" onclick="showPage('score')">🏆 Score</button>
-<button id="historyNav" onclick="showPage('history')">📜 History</button>
 </div>
 
 <section id="setupPage" class="page active">
@@ -90,7 +97,7 @@ button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;font-weight:
 <button class="score-btn" onclick="changeScore('a',1)">+1</button>
 <button class="score-btn" onclick="changeScore('a',7)">+7</button>
 </div>
-<button class="manual" onclick="openManual('a')">✏️ Edit Score</button>
+<button class="manual" onclick="openManual('a')">✏️ Edit Score</button><div class="team-history"><h3>📜 Recent Updates</h3><div id="historyA"></div></div>
 </div>
 
 <div class="team-card team-blue">
@@ -102,7 +109,7 @@ button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;font-weight:
 <button class="score-btn" onclick="changeScore('b',1)">+1</button>
 <button class="score-btn" onclick="changeScore('b',7)">+7</button>
 </div>
-<button class="manual" onclick="openManual('b')">✏️ Edit Score</button>
+<button class="manual" onclick="openManual('b')">✏️ Edit Score</button><div class="team-history"><h3>📜 Recent Updates</h3><div id="historyB"></div></div>
 </div>
 </div>
 
@@ -111,13 +118,7 @@ button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;font-weight:
 </div>
 <div id="status" class="status"></div>
 </section>
-<section id="historyPage" class="page">
-  <div class="card">
-    <h2>📜 Full Update History</h2>
-    <p class="note">Every score, team-name, and tournament-name update is recorded with its date and time.</p>
-    <div id="historyList"></div>
-  </div>
-</section>
+
 </div>
 
 <div id="modal" class="modal">
@@ -179,7 +180,7 @@ try{
    // Rebuilding inputs is what causes Android's keyboard to close.
    updateSetupFieldsWithoutReplacingInputs();
    renderScore();
-   renderHistory();
+   
  });
 }catch(e){
  console.error(e);
@@ -261,12 +262,54 @@ function renderSetup(){
  });
 }
 
+
+function timeAgo(timestamp){
+  const mins=Math.floor(Math.max(0,Date.now()-Number(timestamp||0))/60000);
+  if(mins<1)return "just now";
+  if(mins===1)return "1 min ago";
+  if(mins<60)return mins+" mins ago";
+  const hours=Math.floor(mins/60);
+  if(hours===1)return "1 hour ago";
+  if(hours<24)return hours+" hours ago";
+  const days=Math.floor(hours/24);
+  return days===1?"1 day ago":days+" days ago";
+}
+
+function renderTeamHistory(team){
+  const box=el(team==="a"?"historyA":"historyB");
+  if(!box)return;
+  const t=tournaments[current];
+  const events=(t.history||[]).filter(e=>{
+    return (e.action==="Score updated" || e.action==="Manual score updated" || e.action==="Undo") &&
+      e.oldState && e.newState &&
+      Number(e.oldState[team])!==Number(e.newState[team]);
+  }).slice(-10).reverse();
+
+  if(!events.length){
+    box.innerHTML='<div class="team-history-empty">No updates yet</div>';
+    return;
+  }
+
+  box.innerHTML=events.map(e=>{
+    const oldScore=Number(e.oldState[team])||0;
+    const newScore=Number(e.newState[team])||0;
+    const delta=newScore-oldScore;
+    const sign=delta>0?"+":"";
+    return `<div class="team-history-item">
+      <span class="team-history-change">${oldScore} → ${newScore} (${sign}${delta})</span>
+      <span class="team-history-time">${escapeHtml(timeAgo(e.timestamp))}</span>
+    </div>`;
+  }).join("");
+}
+
 function renderScore(){
  const t=tournaments[current] || DEFAULTS[0];
  el("teamALabel").textContent=t.teamA||"Red Team";
  el("teamBLabel").textContent=t.teamB||"Blue Team";
  el("scoreA").textContent=t.a;
  el("scoreB").textContent=t.b;
+  renderTeamHistory("a");
+  renderTeamHistory("b");
  el("status").textContent=`${t.name} • ${t.teamA||"Red Team"} ${t.a} — ${t.b} ${t.teamB||"Blue Team"}`;
  const buttons=el("tournamentButtons");buttons.innerHTML="";
  tournaments.forEach((x,i)=>{
@@ -277,41 +320,7 @@ function renderScore(){
  });
 }
 
-function renderHistory(){
-  const box=el("historyList");
-  if(!box)return;
-  const entries=[];
-  tournaments.forEach((t,i)=>{
-    (t.history||[]).forEach(event=>{
-      entries.push({
-        tournament:t.name||("Tournament "+(i+1)),
-        timestamp:Number(event.timestamp)||0,
-        action:event.action||"Update",
-        details:event.details||"",
-        score:event.newState && Number.isFinite(Number(event.newState.a)) && Number.isFinite(Number(event.newState.b))
-          ? `${t.teamA||"Red Team"} ${event.newState.a} — ${event.newState.b} ${t.teamB||"Blue Team"}`
-          : ""
-      });
-    });
-  });
-  entries.sort((a,b)=>b.timestamp-a.timestamp);
-  if(!entries.length){
-    box.innerHTML='<div class="history-empty">No updates yet.</div>';
-    return;
-  }
-  box.innerHTML=entries.map(e=>{
-    const d=new Date(e.timestamp);
-    const time=Number.isNaN(d.getTime())?"Unknown time":
-      d.toLocaleString([], {dateStyle:"medium",timeStyle:"medium"});
-    return `<div class="history-item">
-      <div class="history-time">${escapeHtml(time)}</div>
-      <div class="history-action">${escapeHtml(e.tournament)} — ${escapeHtml(e.action)}</div>
-      <div class="history-detail">${escapeHtml(e.details)}</div>
-      ${e.score?`<div class="history-score">${escapeHtml(e.score)}</div>`:""}
-    </div>`;
-  }).join("");
-}
-function render(){renderSetup();renderScore();renderHistory()}
+function render(){renderSetup();renderScore()}
 
 function addHistory(t,action,details,oldState,newState){
  t.history=t.history||[];
@@ -335,7 +344,7 @@ function updateTournamentName(i,value){
  const title=el("setupList").children[i]?.querySelector("h2");
  if(title) title.textContent=t.name;
  if(i===current) renderScore();
- persist();renderHistory();
+ persist();
 }
 
 function updateTeam(i,team,value){
@@ -348,7 +357,7 @@ function updateTeam(i,team,value){
    `${team==="teamA"?"Team 1 / Red Team":"Team 2 / Blue Team"}: "${oldValue}" → "${newValue}"`,
    {[team]:oldValue},{[team]:newValue});
  if(i===current) renderScore();
- persist();renderHistory();
+ persist();
 }
 
 function changeScore(team,amount){
@@ -361,7 +370,7 @@ function changeScore(team,amount){
  addHistory(t,"Score updated",
    `${team==="a"?t.teamA:t.teamB}: ${oldScore} → ${newScore} (${amount>0?"+":""}${amount})`,
    {a:oldA,b:oldB},{a:Number(t.a)||0,b:Number(t.b)||0});
- persist();renderScore();renderHistory();
+ persist();renderScore();
 }
 
 function undo(){
@@ -377,7 +386,7 @@ function undo(){
  t.b=Number(last.oldState.b)||0;
  addHistory(t,"Undo",`Score restored from ${oldA}–${oldB} to ${t.a}–${t.b}`,
    {a:oldA,b:oldB},{a:t.a,b:t.b});
- persist();renderScore();renderHistory();
+ persist();renderScore();
 }
 
 function openManual(team){
@@ -400,7 +409,7 @@ function saveManual(){
      addHistory(t,"Manual score updated",
        `${manualTeam==="a"?t.teamA:t.teamB}: ${oldScore} → ${value}`,
        {a:oldA,b:oldB},{a:Number(t.a)||0,b:Number(t.b)||0});
-     persist();renderScore();renderHistory();
+     persist();renderScore();
    }
    closeManual();
  }
@@ -410,6 +419,7 @@ function escapeHtml(s){
 }
 function escapeAttr(s){return escapeHtml(s)}
 el("modal").addEventListener("click",e=>{if(e.target===el("modal"))closeManual()});
+setInterval(()=>{if(el("scorePage")?.classList.contains("active")){renderTeamHistory("a");renderTeamHistory("b");}},60000);
 render();
 </script>
 </body>
